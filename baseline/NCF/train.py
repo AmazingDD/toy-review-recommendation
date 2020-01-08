@@ -2,7 +2,7 @@
 @Author: Yu Di
 @Date: 2020-01-08 15:12:15
 @LastEditors  : Yudi
-@LastEditTime : 2020-01-08 15:55:09
+@LastEditTime : 2020-01-08 15:59:37
 @Company: Cardinal Operation
 @Email: yudi@shanshu.ai
 @Description: 
@@ -66,6 +66,14 @@ def ndcg_at_k(r, k):
     return dcg_at_k(r, k) / idcg
 
 parser = argparse.ArgumentParser()
+parser.add_argument('--dataset', 
+                    type=str, 
+                    default='music', 
+                    help='select dataset')
+parser.add_argument('--model_name', 
+                    type=str, 
+                    default='NeuMF-end', 
+                    help='target model name, if NeuMF-pre plz run MLP and GMF before')
 parser.add_argument("--lr", 
                     type=float, 
                     default=0.001, 
@@ -140,7 +148,7 @@ class PointMFData(data.Dataset):
 
         return user, item, label
 
-TPS_DIR = './data/music'
+TPS_DIR = f'./data/{args.dataset}'
 train = pd.read_csv(os.path.join(TPS_DIR, 'train.csv'))[['raw_userid', 'raw_itemid', 'rating', 'n_content']]
 valid = pd.read_csv(os.path.join(TPS_DIR, 'valid_foldin.csv'))[['raw_userid', 'raw_itemid', 'rating', 'n_content']]
 test = pd.read_csv(os.path.join(TPS_DIR, 'test_foldin.csv'))[['raw_userid', 'raw_itemid', 'rating', 'n_content']]
