@@ -2,7 +2,7 @@
 @Author: Yu Di
 @Date: 2020-01-08 15:12:15
 @LastEditors  : Yudi
-@LastEditTime : 2020-01-08 15:59:37
+@LastEditTime : 2020-01-08 22:10:35
 @Company: Cardinal Operation
 @Email: yudi@shanshu.ai
 @Description: 
@@ -90,7 +90,7 @@ parser.add_argument("--epochs",
                     type=int,
                     default=20,  
                     help="training epoches")
-parser.add_argument("--top_k", 
+parser.add_argument("--topk", 
                     type=int, 
                     default=50, 
                     help="compute metrics@top_k")
