@@ -9,7 +9,7 @@ Chong Chen (cstchenc@163.com)
 Lei Zheng, Vahid Noroozi, and Philip S Yu. 2017. Joint deep modeling of users and items using reviews for recommendation.
 In WSDM. ACM, 425-434.
 '''
-
+import os
 import numpy as np
 import tensorflow as tf
 import math
@@ -17,7 +17,52 @@ from tensorflow.contrib import learn
 import datetime
 
 import pickle
+from tqdm import tqdm
+from collections import defaultdict
 import DeepCoNN
+
+def recall_at_k(rs, test_ur, k):
+    assert k >= 1
+    res = []
+    for user in test_ur.keys():
+        r = np.asarray(rs[user])[:k] != 0
+        if r.size != k:
+            raise ValueError('Relevance score length < k')
+        if len(test_ur[user]) == 0:
+            raise KeyError(f'Invalid User Index: {user}')
+        res.append(sum(r) / len(test_ur[user]))
+
+    return np.mean(res)
+
+def dcg_at_k(r, k):
+    '''
+    Args:
+        r: Relevance scores (list or numpy) in rank order
+            (first element is the first item)
+        k: Number of results to consider
+    Returns:
+        Discounted cumulative gain
+    '''
+    assert k >= 1
+    r = np.asfarray(r)[:k] != 0
+    if r.size:
+        return np.sum(np.subtract(np.power(2, r), 1) / np.log2(np.arange(2, r.size + 2)))
+    return 0.
+
+def ndcg_at_k(r, k):
+    '''
+    Args:
+        r: Relevance scores (list or numpy) in rank order
+            (first element is the first item)
+        k: Number of results to consider
+    Returns:
+        Normalized discounted cumulative gain
+    '''
+    assert k >= 1
+    idcg = dcg_at_k(sorted(r, reverse=True), k)
+    if not idcg:
+        return 0.
+    return dcg_at_k(r, k) / idcg
 
 tf.flags.DEFINE_string("word2vec", None, "Word2vec file with pre-trained embeddings (default: None)")
 tf.flags.DEFINE_string("valid_data","../data/music/music.test", " Data for validation")
@@ -159,7 +204,7 @@ if __name__ == '__main__':
                     header = f.readline()
                     vocab_size, layer1_size = map(int, header.split())
                     binary_len = np.dtype('float32').itemsize * layer1_size
-                    for line in xrange(vocab_size):
+                    for line in range(vocab_size):
                         word = []
                         while True:
                             ch = f.read(1)
@@ -186,7 +231,7 @@ if __name__ == '__main__':
                     header = f.readline()
                     vocab_size, layer1_size = map(int, header.split())
                     binary_len = np.dtype('float32').itemsize * layer1_size
-                    for line in xrange(vocab_size):
+                    for line in range(vocab_size):
                         word = []
                         while True:
                             ch = f.read(1)
@@ -215,7 +260,6 @@ if __name__ == '__main__':
             train_rmse = 0
 
             pkl_file = open(FLAGS.train_data, 'rb')
-
             train_data = pickle.load(pkl_file)
 
             train_data = np.array(train_data)
@@ -232,7 +276,7 @@ if __name__ == '__main__':
             batch_size = 100
             ll = int(len(train_data) / batch_size)
 
-            for epoch in range(40):
+            for epoch in range(2): # 40
                 # Shuffle the data at each epoch
                 shuffle_indices = np.random.permutation(np.arange(data_size_train))
                 shuffled_data = train_data[shuffle_indices]
@@ -345,4 +389,76 @@ if __name__ == '__main__':
 
         return predictions
 
+    def get_ur(df):
+        ur = defaultdict(set)
+        for _, row in df.iterrows():
+            ur[int(row['user'])].add(int(row['item']))
+
+        return ur
+
+    import pandas as pd
+    test_df = pd.read_csv('../data/music/music_test.csv', header=None, names=['user', 'item', 'rating'])
+    train_df = pd.read_csv('../data/music/music_train.csv', header=None, names=['user', 'item', 'rating'])
+    valid_df = pd.read_csv('../data/music/music_valid.csv', header=None, names=['user', 'item', 'rating'])
+    train_df = pd.concat([train_df, valid_df], ignore_index=True)
+    test_ur = get_ur(test_df)
+    total_train_ur = get_ur(train_df)
+    item_pool = set(range(item_num))
+
+    test_ucands = defaultdict(list)
+    for k, v in test_ur.items():
+        if k >= user_num:
+            continue
+        sub_item_pool = item_pool - total_train_ur[k] # remove GT & interacted
+        test_ucands[k] = list(sub_item_pool)
+
+    print('')
+    print('Generate recommend list...')
+    print('')
+    preds = {}
+    for u in tqdm(test_ucands.keys()):
+        tmp = pd.DataFrame({'user': [u for _ in test_ucands[u]], 
+                            'item': test_ucands[u], 
+                            'rating': [0. for _ in test_ucands[u]], # fake label, make nonsense
+                            })
+
+        data_rank = np.array(list(zip(tmp['user'].values[:, np.newaxis], 
+                                      tmp['item'].values[:, np.newaxis], 
+                                      tmp['rating'].values[:, np.newaxis])))
+
+        userid_rank, itemid_rank, y_rank = zip(*data_rank)
+        u_rank = []
+        i_rank = []
+        for i in range(len(userid_rank)):
+            u_rank.append(u_text[userid_rank[i][0]])
+            i_rank.append(i_text[itemid_rank[i][0]])
+        u_rank = np.array(u_rank)
+        u_rank = np.array(u_rank)
+        predictions = rank_step(u_rank, i_rank, userid_rank, itemid_rank, y_rank)
+        pred_rates = [rate[0] for rate in predictions[0]]
+        rec_idx = np.argsort(pred_rates)[::-1][:50]
+        top_n = np.array(test_ucands[u])[rec_idx]
+    
+        preds[u] = top_n
+
+    for u in preds.keys():
+        preds[u] = [1 if i in test_ur[u] else 0 for i in preds[u]]
+
+    print('Save metric@k result to res folder...')
+    result_save_path = f'./res/'
+    if not os.path.exists(result_save_path):
+        os.makedirs(result_save_path)
+
+    res = pd.DataFrame({'metric@K': ['rec', 'ndcg']})
+    for k in [1, 5, 10, 20, 30, 50]:
+        tmp_preds = preds.copy()
+        tmp_preds = {key: rank_list[:k] for key, rank_list in tmp_preds.items()}
+        
+        rec_k = recall_at_k(tmp_preds, test_ur, k)
+        ndcg_k = np.mean([ndcg_at_k(r, k) for r in tmp_preds.values()])
+
+        res[k] = np.array([rec_k, ndcg_k])
+
+    res.to_csv(f'{result_save_path}topk_res.csv', index=False)
+    
     
