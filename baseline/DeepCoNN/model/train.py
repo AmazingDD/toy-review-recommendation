@@ -331,3 +331,18 @@ if __name__ == '__main__':
             print('best mae:', best_mae)
 
     print('end')
+
+    def rank_step(u_batch, i_batch, uid, iid, y_batch, writer=None):
+        feed_dict = {
+            deep.input_u: u_batch,
+            deep.input_i: i_batch,
+            deep.input_y: y_batch,
+            deep.input_uid: uid,
+            deep.input_iid: iid,
+            deep.dropout_keep_prob: 1.0
+        }
+        predictions = sess.run([deep.predictions], feed_dict)
+
+        return predictions
+
+    
