@@ -17,31 +17,48 @@ import numpy as np
 TPS_DIR = '../data/music'
 TP_file = os.path.join(TPS_DIR, 'Digital_Music_5.json')
 
-f= open(TP_file)
-users_id=[]
-items_id=[]
-ratings=[]
-reviews=[]
-np.random.seed(2017)
+# f= open(TP_file)
+# users_id=[]
+# items_id=[]
+# ratings=[]
+# reviews=[]
+# np.random.seed(2017)
 
-for line in f:
-    js=json.loads(line)
-    if str(js['reviewerID'])=='unknown':
-        print("unknown")
-        continue
-    if str(js['asin'])=='unknown':
-        print("unknown2")
-        continue
-    reviews.append(js['reviewText'])
-    users_id.append(str(js['reviewerID'])+',')
-    items_id.append(str(js['asin'])+',')
-    ratings.append(str(js['overall']))
-data=pd.DataFrame({'user_id':pd.Series(users_id),
-                   'item_id':pd.Series(items_id),
-                   'ratings':pd.Series(ratings),
-                   'reviews':pd.Series(reviews)})[['user_id','item_id','ratings','reviews']]
+# for line in f:
+#     js=json.loads(line)
+#     if str(js['reviewerID'])=='unknown':
+#         print("unknown")
+#         continue
+#     if str(js['asin'])=='unknown':
+#         print("unknown2")
+#         continue
+#     reviews.append(js['reviewText'])
+#     users_id.append(str(js['reviewerID'])+',')
+#     items_id.append(str(js['asin'])+',')
+#     ratings.append(str(js['overall']))
+# data=pd.DataFrame({'user_id':pd.Series(users_id),
+#                    'item_id':pd.Series(items_id),
+#                    'ratings':pd.Series(ratings),
+#                    'reviews':pd.Series(reviews)})[['user_id','item_id','ratings','reviews']]
 
-data.sample(frac=0.5, replace=True, random_state=2019).reset_index(drop=True)
+# data.sample(frac=0.5, replace=True, random_state=2019).reset_index(drop=True)
+
+# tmp operation
+train = pd.read_csv(os.path.join(TPS_DIR, 'train.csv'))[['raw_userid', 'raw_itemid', 'rating', 'n_content']]
+valid = pd.read_csv(os.path.join(TPS_DIR, 'valid_foldin.csv'))[['raw_userid', 'raw_itemid', 'rating', 'n_content']]
+test = pd.read_csv(os.path.join(TPS_DIR, 'test_foldin.csv'))[['raw_userid', 'raw_itemid', 'rating', 'n_content']]
+train = train.dropna()
+valid = valid.dropna()
+test = test.dropna()
+train_idx = len(train) - 1
+valid_idx = train_idx + len(valid)
+test_idx = valid_idx + len(test)
+data = pd.concat([train, valid, test], ignore_index=True)
+data.rename(columns={'raw_userid': 'user_id', 
+                     'raw_itemid': 'item_id',
+                     'rating': 'ratings', 
+                     'n_content': 'reviews'}, inplace=True)
+###############
 
 def get_count(tp, id):
     playcount_groupbyid = tp[[id, 'ratings']].groupby(id, as_index=False)
@@ -63,29 +80,41 @@ data=numerize(data)
 tp_rating=data[['user_id','item_id','ratings']]
 
 
-n_ratings = tp_rating.shape[0]
-test = np.random.choice(n_ratings, size=int(0.20 * n_ratings), replace=False)
-test_idx = np.zeros(n_ratings, dtype=bool)
-test_idx[test] = True
+# n_ratings = tp_rating.shape[0]
+# test = np.random.choice(n_ratings, size=int(0.20 * n_ratings), replace=False)
+# test_idx = np.zeros(n_ratings, dtype=bool)
+# test_idx[test] = True
 
-tp_1 = tp_rating[test_idx]
-tp_train= tp_rating[~test_idx]
+# tp_1 = tp_rating[test_idx]
+# tp_train= tp_rating[~test_idx]
 
-data2=data[test_idx]
-data=data[~test_idx]
+# data2=data[test_idx]
+# data=data[~test_idx]
 
 
-n_ratings = tp_1.shape[0]
-test = np.random.choice(n_ratings, size=int(0.50 * n_ratings), replace=False)
+# n_ratings = tp_1.shape[0]
+# test = np.random.choice(n_ratings, size=int(0.50 * n_ratings), replace=False)
 
-test_idx = np.zeros(n_ratings, dtype=bool)
-test_idx[test] = True
+# test_idx = np.zeros(n_ratings, dtype=bool)
+# test_idx[test] = True
 
-tp_test = tp_1[test_idx]
-tp_valid = tp_1[~test_idx]
+# tp_test = tp_1[test_idx]
+# tp_valid = tp_1[~test_idx]
+# tp_train.to_csv(os.path.join(TPS_DIR, 'music_train.csv'), index=False,header=None)
+# tp_valid.to_csv(os.path.join(TPS_DIR, 'music_valid.csv'), index=False,header=None)
+# tp_test.to_csv(os.path.join(TPS_DIR, 'music_test.csv'), index=False,header=None)
+
+# tmp operation
+tp_train = tp_rating.iloc[:train_idx, :]
+tp_valid = tp_rating.iloc[train_idx:valid_idx, :]
+tp_test = tp_rating.iloc[valid_idx:test_idx, :]
 tp_train.to_csv(os.path.join(TPS_DIR, 'music_train.csv'), index=False,header=None)
 tp_valid.to_csv(os.path.join(TPS_DIR, 'music_valid.csv'), index=False,header=None)
 tp_test.to_csv(os.path.join(TPS_DIR, 'music_test.csv'), index=False,header=None)
+
+data2 = data[valid_idx:test_idx]
+data = data[:valid_idx]
+###############
 
 user_reviews={}
 item_reviews={}
